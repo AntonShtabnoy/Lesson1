@@ -1,0 +1,69 @@
+package com.moneyman.util.common;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
+@AllArgsConstructor
+@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+public class OptionalSupplierChain<T> {
+
+  @AllArgsConstructor
+  private static class SupplierHolder<T> {
+
+    private final Supplier<Optional<T>> optionalSupplier;
+    private final Supplier<T> valueSupplier;
+
+    private Optional<T> get() {
+      return Optional.ofNullable(optionalSupplier)
+          .map(Supplier::get)
+          .orElseGet(() -> Optional.ofNullable(valueSupplier.get()));
+    }
+  }
+
+  private final List<SupplierHolder<T>> suppliers = new ArrayList<>();
+
+  public static <T> OptionalSupplierChain<T> of(Class<T> cls) {
+    return new OptionalSupplierChain<>();
+  }
+
+  public OptionalSupplierChain<T> withSupplier(Supplier<Optional<T>> supplier) {
+    if (supplier != null) {
+      suppliers.add(new SupplierHolder<>(supplier, null));
+    }
+    return this;
+  }
+
+  public OptionalSupplierChain<T> withValueSupplier(Supplier<T> supplier) {
+    if (supplier != null) {
+      suppliers.add(new SupplierHolder<>(null, supplier));
+    }
+    return this;
+  }
+
+  public Optional<T> withDefaultGet(Supplier<T> defaultValue) {
+    return Optional.ofNullable(getStream()
+        .orElseGet(defaultValue));
+  }
+
+  public T orElse(T defaultValue) {
+    return getStream().orElse(defaultValue);
+  }
+
+  public void ifPresent(Consumer<T> consumer) {
+    getStream().ifPresent(consumer);
+  }
+
+  private Optional<T> getStream() {
+    return suppliers.stream()
+        .map(SupplierHolder::get)
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .findFirst();
+  }
+}
